@@ -1,0 +1,43 @@
+{
+  "name": "slash",
+  "version": "1.0.0",
+  "description": "htm + hyper + reactive signals (no VDOM) — tiny, fast, DX-first",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "files": ["dist"],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build:js": "bun build src/index.ts --outdir dist --format esm,cjs --minify",
+    "build:types": "tsc -p tsconfig.build.json",
+    "build": "bun run clean && bun run build:js && bun run build:types",
+    "dev": "bun build src/index.ts --outdir dist --format esm --watch",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "publish:jsr": "jsr publish"
+  },
+  "dependencies": {
+    "htm": "^3.1.1"
+  },
+  "peerDependencies": {
+    "typescript": "^5.3.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.2"
+  },
+  "engines": {
+    "bun": ">=1.2.22",
+    "node": ">=18"
+  }
+}
+
