@@ -1,6 +1,6 @@
 {
   "name": "slash",
-  "version": null,
+  "version": "0.1.0",
   "description": "htm + hyper + reactive signals (no VDOM) — tiny, fast, DX-first",
   "license": "MIT",
   "type": "module",
