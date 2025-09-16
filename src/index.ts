@@ -1,4 +1,4 @@
-export * from "./signals";
 export { html, render } from "./hyper";
+export * from "./signals";
 export * from "./components";
 

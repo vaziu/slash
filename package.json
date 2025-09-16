@@ -1,6 +1,6 @@
 {
   "name": "slash",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "htm + hyper + reactive signals (no VDOM) — tiny, fast, DX-first",
   "license": "MIT",
   "type": "module",
@@ -13,17 +13,21 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.mjs",
+      "bun": "./src/index.ts"
     }
   },
+
   "scripts": {
     "clean": "rm -rf dist",
-    "build:js": "bun build src/index.ts --outdir dist --format esm,cjs --minify",
-    "build:types": "tsc -p tsconfig.build.json",
+    "build:js:esm": "bun build src/index.ts --outfile dist/index.mjs --format esm --minify",
+    "build:js:cjs": "bun build src/index.ts --outfile dist/index.cjs --format cjs --minify",
+    "build:js": "bun run build:js:esm && bun run build:js:cjs",
+    "build:types": "tsc -p ../../tsconfig.build.json",
     "build": "bun run clean && bun run build:js && bun run build:types",
-    "dev": "bun build src/index.ts --outdir dist --format esm --watch",
-    "check": "tsc -p tsconfig.json --noEmit",
-    "publish:jsr": "jsr publish"
+    "prepublishOnly": "bun run build",
+    "dev": "bun build src/index.ts --outdir dist --format esm --watch"
   },
   "dependencies": {
     "htm": "^3.1.1"
@@ -33,11 +37,8 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/node": "^24.5.0",
     "typescript": "^5.6.2"
-  },
-  "engines": {
-    "bun": ">=1.2.22",
-    "node": ">=18"
   }
 }
 
