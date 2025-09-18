@@ -1,13 +1,6 @@
 // packages/slash/src/components.ts
-
-// Reatividade
-export { createSignal, effect, computed, memo } from "./signals";
-export type { Signal, ReadonlySignal } from "./signals";
-
-// Renderer + utilitários do hyper (com reatividade embutida)
-export { html, h, render, Repeat, destroyNode } from "./hyper";
-
-import { computed, type Signal, type ReadonlySignal } from "./signals";
+import type { Signal, ReadonlySignal } from "./types";
+import { computed } from "./signals"
 
 /* ------------------------------------------------------------------ */
 /* Helpers de DX                                                       */

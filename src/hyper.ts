@@ -1,14 +1,25 @@
 import htm from "htm";
-import type { ReadonlySignal, Signal } from "./signals";
+import { setListRendererImpl } from "./signals";
+import type {
+  HTMTemplate,
+  HTMModule,
+  Props,
+  Child,
+  Elementish,
+  EventHandler,
+  EventOptions,
+  EventTuple,
+  Key,
+  ReadonlySignal,
+  Signal,
+  SignalLike,
+} from "./types";
 
 /* -------------------------------------------------------------
  * Tipos e utilitários
  * ----------------------------------------------------------- */
 
-type SignalLike<T = unknown> = {
-  get(): T;
-  subscribe(fn: (v: T) => void): () => void;
-};
+
 
 function isSignalLike(x: unknown): x is SignalLike {
   return (
@@ -17,32 +28,6 @@ function isSignalLike(x: unknown): x is SignalLike {
     typeof (x as Record<string, unknown>).subscribe === "function"
   );
 }
-
-type Elementish = HTMLElement | SVGElement;
-
-type Child =
-  | Node
-  | string
-  | number
-  | boolean
-  | null
-  | undefined
-  | SignalLike
-  | Child[]
-  | readonly Child[];
-
-type Props = Record<string, unknown> | null;
-
-// Eventos (sem any / sem null)
-type EventOptions = boolean | AddEventListenerOptions;
-type EventHandler = EventListenerOrEventListenerObject;
-type EventTuple = readonly [EventHandler, EventOptions?];
-
-// Tipos para o HTM
-type HTMTemplate = (strings: TemplateStringsArray, ...values: unknown[]) => Child;
-type HTMModule = {
-  bind(h: (tag: unknown, props: Props, ...children: Child[]) => Node): HTMTemplate;
-};
 
 function toStr(v: unknown): string {
   return v == null ? "" : typeof v === "string" ? v : String(v);
@@ -66,7 +51,7 @@ export function destroyNode(node: Node): void {
     for (const f of fns) {
       try {
         f();
-      } catch {}
+      } catch { }
     }
     CLEANUPS.delete(node);
   }
@@ -88,6 +73,22 @@ function appendReactiveText(parent: Node, sig: SignalLike<unknown>): void {
   parent.appendChild(tn);
 }
 
+// 1) helper para anexar um Node com segurança (sem mover/exaurir)
+function appendNodeSafe(parent: Node, node: Node): void {
+  // Fragment: é consumido ao append, então clone sempre
+  if (node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+    parent.appendChild(node.cloneNode(true));
+    return;
+  }
+  // Node já está em outro parent? clone para não mover
+  if (node.parentNode && node.parentNode !== parent) {
+    parent.appendChild(node.cloneNode(true));
+    return;
+  }
+  parent.appendChild(node);
+}
+
+// 2) use o helper dentro de appendChildSmart
 function appendChildSmart(parent: Node, child: Child): void {
   if (child == null || child === false) return;
 
@@ -102,11 +103,11 @@ function appendChildSmart(parent: Node, child: Child): void {
   }
 
   if (child instanceof Node) {
-    parent.appendChild(child);
+    appendNodeSafe(parent, child);   // <- aqui
     return;
   }
 
-  parent.appendChild(document.createTextNode(toStr(child)));
+  appendNodeSafe(parent, document.createTextNode(toStr(child))); // <- aqui
 }
 
 /* -------------------------------------------------------------
@@ -167,7 +168,7 @@ function parseEventProp(x: unknown): { handler: EventHandler; options?: EventOpt
     const handler = x[0];
     const options = x.length > 1 ? x[1] : undefined;
     return { handler, options };
-    }
+  }
   return null;
 }
 
@@ -322,7 +323,6 @@ export function render(view: RootView, container: Element): Node | Node[] {
  * Repeat: keyed diff com blocos movíveis (suporta múltiplos nós por item)
  * ----------------------------------------------------------- */
 
-type Key = string | number;
 type RenderItem<T> = (item: T) => Child;
 
 function removeBlockRange(start: Node, end: Node): void {
@@ -390,6 +390,8 @@ export function Repeat<T>(
     }
   }
 
+
+
   function patch(nextItems: T[]): void {
     const parent = anchor.parentNode!;
     const seen = new Set<Key>();
@@ -430,3 +432,8 @@ export function Repeat<T>(
   return anchor;
 }
 
+setListRendererImpl(<T>(
+  listSig: ReadonlySignal<T[]>,
+  keyOf: (item: T) => Key,
+  renderItem: (item: T) => Child
+): Node => Repeat(listSig, keyOf, renderItem));
