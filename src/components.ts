@@ -12,54 +12,6 @@ function isSignalLike<T = unknown>(x: unknown): x is SignalLike<T> {
 }
 
 /**
- * modelText — two-way bind para <input type="text"> / <textarea>
- * Uso:
- *   const name = createSignal("");
- *   html`<input ${modelText(name)} />`
- */
-export function modelText(sig: Signal<string>) {
-  return {
-    value: sig,
-    onInput: (e: Event) => {
-      const t = e.currentTarget as HTMLInputElement | HTMLTextAreaElement;
-      sig.set(t.value);
-    },
-  };
-}
-
-/**
- * modelChecked — two-way bind para <input type="checkbox">
- * Uso:
- *   const done = createSignal(false);
- *   html`<input type="checkbox" ${modelChecked(done)} />`
- */
-export function modelChecked(sig: Signal<boolean>) {
-  return {
-    checked: sig,
-    onChange: (e: Event) => {
-      const t = e.currentTarget as HTMLInputElement;
-      sig.set(!!t.checked);
-    },
-  };
-}
-
-/**
- * modelSelect — two-way bind para <select>
- * Uso:
- *   const color = createSignal("red");
- *   html`<select ${modelSelect(color)}><option value="red">red</option>...</select>`
- */
-export function modelSelect(sig: Signal<string>) {
-  return {
-    value: sig,
-    onChange: (e: Event) => {
-      const t = e.currentTarget as HTMLSelectElement;
-      sig.set(t.value);
-    },
-  };
-}
-
-/**
  * toggleClass — liga/desliga uma classe (string) com boolean ou Signal<boolean>.
  * Retorna algo aplicável em `class=...` do hyper (que aceita string/objeto/sinal).
  *
