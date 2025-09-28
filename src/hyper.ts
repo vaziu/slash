@@ -64,14 +64,45 @@ export function destroyNode(node: Node): void {
  * Children com reatividade (interpolações)
  * ----------------------------------------------------------- */
 
-function appendReactiveText(parent: Node, sig: SignalLike<unknown>): void {
-  const tn = document.createTextNode(toStr(sig.get()));
-  const unsub = sig.subscribe((v) => {
-    tn.nodeValue = toStr(v);
-  });
-  addCleanup(tn, unsub);
-  parent.appendChild(tn);
+// Renderiza um SignalLike<unknown> como bloco reativo entre marcadores
+function appendReactiveChild(parent: Node, sig: SignalLike<unknown>): void {
+  const start = document.createComment("sig:start");
+  const end   = document.createComment("sig:end");
+  parent.appendChild(start);
+  parent.appendChild(end);
+
+  const renderBetween = (value: unknown): void => {
+    // limpa nós atuais entre start e end
+    let n = start.nextSibling;
+    while (n && n !== end) {
+      const next = n.nextSibling;
+      destroyNode(n);
+      parent.removeChild(n);
+      n = next;
+    }
+
+    // insere o novo conteúdo antes do marcador 'end'
+    const frag = document.createDocumentFragment();
+    if (value == null || value === false) {
+      // nada a inserir
+    } else if (Array.isArray(value)) {
+      for (const v of value) appendChildSmart(frag, v as Child);
+    } else if (value instanceof Node) {
+      appendNodeSafe(frag, value);
+    } else {
+      // string/number/boolean -> texto
+      frag.appendChild(document.createTextNode(toStr(value)));
+    }
+    parent.insertBefore(frag, end);
+  };
+
+  // 1ª pintura + assinatura reativa
+  renderBetween(sig.get());
+  const unsub = sig.subscribe(renderBetween);
+  // cleanup quando o bloco sair do DOM
+  addCleanup(start, unsub);
 }
+
 
 // 1) helper para anexar um Node com segurança (sem mover/exaurir)
 function appendNodeSafe(parent: Node, node: Node): void {
@@ -93,7 +124,7 @@ function appendChildSmart(parent: Node, child: Child): void {
   if (child == null || child === false) return;
 
   if (isSignalLike(child)) {
-    appendReactiveText(parent, child);
+    appendReactiveChild(parent, child);   // <- antes era appendReactiveText
     return;
   }
 
@@ -103,11 +134,11 @@ function appendChildSmart(parent: Node, child: Child): void {
   }
 
   if (child instanceof Node) {
-    appendNodeSafe(parent, child);   // <- aqui
+    appendNodeSafe(parent, child);
     return;
   }
 
-  appendNodeSafe(parent, document.createTextNode(toStr(child))); // <- aqui
+  appendNodeSafe(parent, document.createTextNode(toStr(child)));
 }
 
 /* -------------------------------------------------------------
@@ -179,17 +210,54 @@ function setEvent(el: Element, type: string, handler: EventHandler, opts?: Event
 }
 
 /* ==== props reativas ==== */
+// === REATIVO: aplica valor vindo de Signal e mantém DOM sincronizado ===
 function setPropReactive(el: Elementish, key: string, sig: SignalLike<unknown>): void {
   const apply = (v: unknown): void => {
+    // classes reativas
     if (key === "class" || key === "className") {
       applyClass(el as HTMLElement, v);
       return;
     }
+
+    // estilo reativo por objeto
     if (key === "style" && v && typeof v === "object") {
       Object.assign((el as HTMLElement).style, v as Record<string, unknown>);
       return;
     }
 
+    // inputs/textarea/select: controlled value
+    if (key === "value") {
+      const ctl = el as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+      const next = v == null ? "" : String(v);
+
+      // texto
+      if (ctl.value !== next) ctl.value = next;
+
+      // manter defaultValue alinhado (enter/reset etc.)
+      if ("defaultValue" in ctl) {
+        const t = ctl as HTMLInputElement | HTMLTextAreaElement;
+        if (t.defaultValue !== next) t.defaultValue = next;
+      }
+
+      // select: marcar option selecionado
+      if (ctl instanceof HTMLSelectElement) {
+        for (const opt of Array.from(ctl.options)) {
+          opt.selected = opt.value === next;
+        }
+      }
+      return;
+    }
+
+    // checkbox/radio: controlled checked
+    if (key === "checked") {
+      const box = el as HTMLInputElement;
+      const next = Boolean(v);
+      if (box.checked !== next) box.checked = next;
+      if (box.defaultChecked !== next) box.defaultChecked = next;
+      return;
+    }
+
+    // propriedade direta se existir; senão atributo
     if (key in el) {
       const ok = Reflect.set(el as object, key, v);
       if (!ok) {
@@ -202,38 +270,72 @@ function setPropReactive(el: Elementish, key: string, sig: SignalLike<unknown>):
     }
   };
 
+  // aplica estado atual e assina mudanças
   apply(sig.get());
   const unsub = sig.subscribe(apply);
   addCleanup(el, unsub);
 }
 
-/* ==== setProp com branch de evento limpo ==== */
+// === NÃO REATIVO: aplica valor literal, events, classes, estilo, etc. ===
 function setProp(el: Elementish, key: string, val: unknown): void {
   if (key === "children") return;
 
-  // eventos: onClick, onInput, ...
-  if (key.startsWith("on") && key[2] === key[2]?.toUpperCase()) {
-    const type = key.slice(2).toLowerCase();
-    const parsed = parseEventProp(val);
-    if (parsed) setEvent(el, type, parsed.handler, parsed.options);
-    return;
-  }
-
+  // 1) Signals primeiro: converte para prop reativo
   if (isSignalLike(val)) {
     setPropReactive(el, key, val);
     return;
   }
 
+  // 2) Eventos: onClick / onInput / onChange / ...
+  if (key.startsWith("on") && key[2] === key[2]?.toUpperCase()) {
+    const type = key.slice(2).toLowerCase();
+    const parsed = parseEventProp(val);
+    if (parsed) {
+      el.addEventListener(type, parsed.handler, parsed.options);
+      addCleanup(el, () => el.removeEventListener(type, parsed.handler, parsed.options));
+    }
+    return;
+  }
+
+  // 3) Estilo por objeto
   if (key === "style" && val && typeof val === "object") {
     Object.assign((el as HTMLElement).style, val as Record<string, unknown>);
     return;
   }
 
+  // 4) Classes
   if (key === "class" || key === "className") {
     applyClass(el as HTMLElement, val);
     return;
   }
 
+  // 5) Inputs/textarea/select controlados (setup inicial mesmo sem signal)
+  if (key === "value") {
+    const ctl = el as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+    const next = val == null ? "" : String(val);
+
+    if (ctl.value !== next) ctl.value = next;
+    if ("defaultValue" in ctl) {
+      const t = ctl as HTMLInputElement | HTMLTextAreaElement;
+      if (t.defaultValue !== next) t.defaultValue = next;
+    }
+    if (ctl instanceof HTMLSelectElement) {
+      for (const opt of Array.from(ctl.options)) {
+        opt.selected = opt.value === next;
+      }
+    }
+    return;
+  }
+
+  if (key === "checked") {
+    const box = el as HTMLInputElement;
+    const next = Boolean(val);
+    if (box.checked !== next) box.checked = next;
+    if (box.defaultChecked !== next) box.defaultChecked = next;
+    return;
+  }
+
+  // 6) Propriedade direta ou atributo
   if (key in el) {
     const ok = Reflect.set(el as object, key, val);
     if (!ok) {
