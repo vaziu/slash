@@ -1,5 +1,5 @@
 // src/index.ts
-export { html, h, render, Repeat, destroyNode } from "./hyper";
+export { html, html as tsx, html as jsx, h, render, Repeat, destroyNode } from "./hyper";
 export { createSignal, effect, computed, memo } from "./signals";
 export * from "./components";
 
@@ -11,6 +11,8 @@ export type {
   Signal, ReadonlySignal, SignalArray, ReadonlySignalArray,
   Renderer
 } from "./types";
+
+export * from "./forms"
 
 
 
